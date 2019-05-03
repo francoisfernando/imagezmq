@@ -1,5 +1,5 @@
 # USAGE
-# python server.py --prototxt MobileNetSSD_deploy.prototxt --model MobileNetSSD_deploy.caffemodel --montageW 2 --montageH 2
+# python3 server.py --clip-dir clips --prototxt MobileNetSSD_deploy.prototxt --model MobileNetSSD_deploy.caffemodel --montageW 1 --montageH 1
 
 from concurrent.futures import ThreadPoolExecutor
 from imutils import build_montages
@@ -14,6 +14,8 @@ from saveclip import ClipRecorder
 
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
+ap.add_argument("-cd", "--clip-dir", required=True,
+	help="existing dir to save captured clips")
 ap.add_argument("-p", "--prototxt", required=True,
 	help="path to Caffe 'deploy' prototxt file")
 ap.add_argument("-m", "--model", required=True,
@@ -90,7 +92,7 @@ while True:
 	
 	# create a new frame buffer for the stream
 	if rpiName not in clipRecorders.keys():
-		clipRecorders[rpiName] = ClipRecorder(rpiName, executor)
+		clipRecorders[rpiName] = ClipRecorder(rpiName, executor, args['clip_dir'], framerate=12)
 
 	# record the last active time for the device from which we just
 	# received a frame

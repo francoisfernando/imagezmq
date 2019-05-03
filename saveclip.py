@@ -1,6 +1,7 @@
 
 from concurrent.futures import ThreadPoolExecutor
 import io
+import os.path as path
 import cv2
 import time
 from datetime import datetime
@@ -8,9 +9,13 @@ from collections import deque
 from copy import copy
 
 class ClipRecorder:
-	def __init__(self, name, executor, resolution=(640, 480), framerate=16):
+	def __init__(self, name, executor, clip_dir, resolution=(640, 480), framerate=16):
 		# initialize the camera and stream
 		self.name = name
+
+		# dir to save clips
+		self.clip_dir = clip_dir
+
 		self.resolution = resolution
 		self.framerate = framerate
 
@@ -27,7 +32,8 @@ class ClipRecorder:
 
 	def save_clip(self, file_name, frameBufferToSave):
 		s = time.time()
-		clip_out = cv2.VideoWriter(file_name, cv2.VideoWriter_fourcc('M','J','P','G'), self.framerate, self.resolution)
+		clip_path = path.join(self.clip_dir, file_name)
+		clip_out = cv2.VideoWriter(clip_path, cv2.VideoWriter_fourcc('M','J','P','G'), self.framerate, self.resolution)
 		while len(frameBufferToSave) > 0:
 			clip_out.write(frameBufferToSave.popleft())
 
