@@ -1,14 +1,16 @@
 # USAGE
 # python server.py --prototxt MobileNetSSD_deploy.prototxt --model MobileNetSSD_deploy.caffemodel --montageW 2 --montageH 2
 
-# import the necessary packages
+from concurrent.futures import ThreadPoolExecutor
 from imutils import build_montages
 from datetime import datetime
+import time
 import numpy as np
 import imagezmq
 import argparse
 import imutils
 import cv2
+from saveclip import ClipRecorder
 
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
@@ -26,6 +28,9 @@ args = vars(ap.parse_args())
 
 # initialize the ImageHub object
 imageHub = imagezmq.ImageHub()
+
+# initialize the executor
+executor = ThreadPoolExecutor(max_workers=2)
 
 # initialize the list of class labels MobileNet SSD was trained to
 # detect, then generate a set of bounding box colors for each class
@@ -50,6 +55,9 @@ frameDict = {}
 lastActive = {}
 lastActiveCheck = datetime.now()
 
+# clip recorders
+clipRecorders = {}
+
 # stores the estimated number of Pis, active checking period, and
 # calculates the duration seconds to wait before making a check to
 # see if a device was active
@@ -70,7 +78,7 @@ while True:
 	# the receipt
 	rpiName, jpeg_bytes = imageHub.recv_jpg()
 	jpeg_image = np.asarray(jpeg_bytes, dtype="uint8")
-	frame = cv2.imdecode(jpeg_image, cv2.IMREAD_COLOR)
+	source_frame = cv2.imdecode(jpeg_image, cv2.IMREAD_COLOR)
 
 	# (rpiName, frame) = imageHub.recv_image()
 	imageHub.send_reply(b'OK')
@@ -79,6 +87,10 @@ while True:
 	# that its a newly connected device
 	if rpiName not in lastActive.keys():
 		print("[INFO] receiving data from {}...".format(rpiName))
+	
+	# create a new frame buffer for the stream
+	if rpiName not in clipRecorders.keys():
+		clipRecorders[rpiName] = ClipRecorder(rpiName, executor)
 
 	# record the last active time for the device from which we just
 	# received a frame
@@ -86,7 +98,7 @@ while True:
 
 	# resize the frame to have a maximum width of 400 pixels, then
 	# grab the frame dimensions and construct a blob
-	frame = imutils.resize(frame, width=400)
+	frame = imutils.resize(source_frame, width=400)
 	(h, w) = frame.shape[:2]
 	blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)),
 		0.007843, (300, 300), 127.5)
@@ -128,6 +140,10 @@ while True:
 				# the frame
 				cv2.rectangle(frame, (startX, startY), (endX, endY),
 					(255, 0, 0), 2)
+
+	# if objects of interest are detected capture frames to clip 5 seconds before and after
+	objects_detected = sum([count for (obj, count) in objCount.items()]) > 0
+	clipRecorders[rpiName].add_frame(source_frame, objects_detected)
 
 	# draw the sending device name on the frame
 	cv2.putText(frame, rpiName, (10, 25),
@@ -174,3 +190,4 @@ while True:
 
 # do a bit of cleanup
 cv2.destroyAllWindows()
+executor.shutdown(wait=True)
